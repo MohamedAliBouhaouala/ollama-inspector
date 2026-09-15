@@ -1,0 +1,56 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Build output
+/bin/
+/dist/
+/build/
+
+# Go modules cache (optional if you want to ignore local cache)
+go.work
+
+# Test binary (if generated manually)
+*.test
+
+# Coverage output
+coverage.out
+coverage.html
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Vendor (uncomment if you use vendoring)
+# vendor/
+
+# Go workspace (if used)
+go.work.sum
+
+# Profiling outputs
+cpu.prof
+mem.prof
+*.pprof
+
+# Binary built manually
+app
+main
+ollama-inspector
