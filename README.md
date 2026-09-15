@@ -134,8 +134,6 @@ registry.ollama.ai/library/llama3:latest        # fully qualified
 ## Known limitations
 
 - **No daemon required, but also no daemon features** — this tool reads the raw store; it doesn't pull, push, or run models.
-- **Export filename collision** — if a model has multiple blobs of the same non-model type (rare, but possible with some multi-license models), they map to the same filename and the last one wins. The weights file (`model`) is always unique.
-- **GGUF content** — the tool copies GGUF blobs verbatim. It does not parse tensor data or KV metadata beyond what `inspect` shows from the JSON config.
 
 ---
 
