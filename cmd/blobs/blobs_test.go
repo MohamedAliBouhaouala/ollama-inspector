@@ -1,12 +1,10 @@
 package blobs
 
 import (
-	"bytes"
 	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
-	"text/tabwriter"
 
 	"ollama-inspector/internal"
 	"ollama-inspector/internal/fixtures"
@@ -240,85 +238,69 @@ func TestRun_OrphansOnly(t *testing.T) {
 	}
 }
 
-func TestGetCountAndSize_AllBlobs(t *testing.T) {
+func TestBuildRows_AllBlobs(t *testing.T) {
 	blobs := []*internal.BlobInfo{
 		{Digest: "sha256:" + strings.Repeat("a", 64),
 			Path: "/models/blobs/sha256-" + strings.Repeat("a", 64),
 			Size: 100, RefBy: []string{"model-a:latest"}, MediaType: "config"},
 		{Digest: "sha256:" + strings.Repeat("b", 64), Size: 200}, // orphan, no MediaType set
 	}
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
+	rows := buildRows(blobs, false)
 
-	orphansOnly := false
-	count, total := getCountAndSize(blobs, orphansOnly, tw)
-	if err := tw.Flush(); err != nil {
-		t.Fatal(err)
+	if len(rows) != 2 {
+		t.Fatalf("len(rows) = %d, want 2", len(rows))
 	}
 
-	if count != 2 {
-		t.Errorf("count = %d, want 2", count)
+	var total int64
+	for _, r := range rows {
+		total += r.Raw
 	}
+
 	if total != 300 {
 		t.Errorf("total = %d, want 300", total)
 	}
 
-	out := buf.String()
-
-	if !strings.Contains(out, "model-a:latest") {
-		t.Errorf("expected referencing model name in output:\n%s", out)
+	if rows[0].RefBy != "model-a:latest" {
+		t.Errorf("rows[0].RefBy = %q, want the referencing model name", rows[0].RefBy)
 	}
 
-	if !strings.Contains(out, "(orphan)") {
-		t.Errorf("expected orphan marker for unreferenced blob:\n%s", out)
+	if rows[1].RefBy != "(orphan)" {
+		t.Errorf("rows[1].RefBy = %q, want the orphan marker", rows[1].RefBy)
 	}
 
-	if !strings.Contains(out, "?") {
-		t.Errorf("expected '?' fallback for empty media type:\n%s", out)
+	if rows[1].Type != "?" {
+		t.Errorf("rows[1].Type = %q, want the '?' fallback for empty media type", rows[1].Type)
 	}
 
-	if !strings.Contains(out, "sha256-"+strings.Repeat("a", 64)) {
-		t.Errorf("expected the blob's filename in output:\n%s", out)
+	if !strings.Contains(rows[0].File, "sha256-"+strings.Repeat("a", 64)) {
+		t.Errorf("rows[0].File = %q, want the blob's filename", rows[0].File)
 	}
-
 }
 
-func TestGetCountAndSize_OrphansOnlyFiltersReferenced(t *testing.T) {
+func TestBuildRows_OrphansOnlyFiltersReferenced(t *testing.T) {
 	blobs := []*internal.BlobInfo{
 		{Digest: "sha256:" + strings.Repeat("a", 64), Size: 100, RefBy: []string{"model-a:latest"}},
 		{Digest: "sha256:" + strings.Repeat("b", 64), Size: 200}, // orphan
 	}
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
 
-	orphansOnly := true
-	count, total := getCountAndSize(blobs, orphansOnly, tw)
-	if err := tw.Flush(); err != nil {
-		t.Fatal(err)
+	rows := buildRows(blobs, true)
+
+	if len(rows) != 1 {
+		t.Fatalf("len(rows) = %d, want 1", len(rows))
 	}
 
-	if count != 1 {
-		t.Errorf("count = %d, want 1", count)
+	if rows[0].Raw != 200 {
+		t.Errorf("rows[0].Raw = %d, want 200", rows[0].Raw)
 	}
-	if total != 200 {
-		t.Errorf("total = %d, want 200", total)
-	}
-	if strings.Contains(buf.String(), "model-a:latest") {
-		t.Errorf("orphans-only should exclude referenced blobs:\n%s", buf.String())
+
+	if rows[0].RefBy != "(orphan)" {
+		t.Errorf("orphans-only should keep only unreferenced blobs, got RefBy = %q", rows[0].RefBy)
 	}
 }
 
-func TestGetCountAndSize_Empty(t *testing.T) {
-	var buf bytes.Buffer
-	tw := tabwriter.NewWriter(&buf, 0, 4, 2, ' ', 0)
-
-	orphansOnly := false
-	count, total := getCountAndSize(nil, orphansOnly, tw)
-	if err := tw.Flush(); err != nil {
-		t.Fatal(err)
-	}
-
-	if count != 0 || total != 0 {
-		t.Errorf("count=%d total=%d, want 0,0 for empty input", count, total)
+func TestBuildRows_Empty(t *testing.T) {
+	rows := buildRows(nil, false)
+	if len(rows) != 0 {
+		t.Errorf("len(rows) = %d, want 0 for empty input", len(rows))
 	}
 }

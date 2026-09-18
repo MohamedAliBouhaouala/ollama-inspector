@@ -4,11 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
-	"text/tabwriter"
 
 	"ollama-inspector/internal"
+	"ollama-inspector/internal/format"
 	"ollama-inspector/ollama"
 )
 
@@ -26,6 +24,10 @@ func Run(args []string) error {
 	var quiet bool
 	fs.BoolVar(&quiet, "quiet", false, "Print only each blob's absolute path, one per line (for scripting)")
 	fs.BoolVar(&quiet, "q", false, "Shorthand for -quiet")
+	var formatFlag string
+	fs.StringVar(&formatFlag, "format", "", "Go template for the output, e.g. '{{.Digest}}\\t{{.Size}}'; "+
+		"prefix with \"table \" for aligned columns (this is the default)."+
+		"Pass -format json for JSON output.")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage); fs.PrintDefaults() }
 
 	if err := fs.Parse(args); err != nil {
@@ -53,69 +55,29 @@ func Run(args []string) error {
 
 	internal.IndexBlobReferences(ms, blobs)
 
-	// Sort by size descending
-	sorted := internal.SortBlobs(blobs)
+	// Sort by size descending, then filter down to what -orphans asked for.
+	rows := buildRows(internal.SortBlobs(blobs), *orphansOnly)
 
 	if quiet {
-		return printPathsOnly(sorted, *orphansOnly)
+		return printPathsOnly(rows)
 	}
 
 	fmt.Printf("Blobs directory: %s\n\n", blobsDir)
 
-	tw := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(tw, "DIGEST\tSIZE\tTYPE\tREFERENCED BY\tFILE")
-
-	count, totalSize := getCountAndSize(sorted, *orphansOnly, tw)
-
-	if err := tw.Flush(); err != nil {
+	w, err := format.New(os.Stdout, formatFlag, defaultBlobsFormat)
+	if err != nil {
 		return err
 	}
 
-	fmt.Printf("\n%d blob(s) — total %s\n", count, internal.FmtBytes(totalSize))
-	return nil
-}
-
-func printPathsOnly(sorted []*internal.BlobInfo, orphansOnly bool) error {
-	for _, b := range sorted {
-		if orphansOnly && len(b.RefBy) > 0 {
-			continue
-		}
-		fmt.Println(b.Path)
+	if err := format.List(w, rows, blobsTableHeader); err != nil {
+		return err
 	}
-	return nil
-}
 
-func getCountAndSize(sorted []*internal.BlobInfo, orphansOnly bool, tabWriter *tabwriter.Writer) (int, int64) {
 	var totalSize int64
-	count := 0
-	for _, b := range sorted {
-		if orphansOnly && len(b.RefBy) > 0 {
-			continue
-		}
-		refs := "(orphan)"
-		if len(b.RefBy) > 0 {
-			refs = formatRefs(b.RefBy)
-
-		}
-		mt := b.MediaType
-		if mt == "" {
-			mt = "?"
-		}
-
-		shortDigest := internal.TruncateDigest(b.Digest)
-
-		fmt.Fprintf(tabWriter, "%s\t%s\t%s\t%s\t%s\n", shortDigest, internal.FmtBytes(b.Size),
-			mt, refs, filepath.Base(b.Path))
-
-		totalSize += b.Size
-		count++
+	for _, r := range rows {
+		totalSize += r.Raw
 	}
-	return count, totalSize
-}
+	fmt.Printf("\n%d blob(s) — total %s\n", len(rows), internal.FmtBytes(totalSize))
 
-func formatRefs(refs []string) string {
-	if len(refs) <= maxRefsShown {
-		return strings.Join(refs, ", ")
-	}
-	return fmt.Sprintf("%s (+%d more)", strings.Join(refs[:maxRefsShown], ", "), len(refs)-maxRefsShown)
+	return nil
 }
