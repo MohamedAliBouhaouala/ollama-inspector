@@ -3,7 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"ollama-inspector/ollama"
 )
@@ -24,9 +23,8 @@ type Report struct {
 	TotalSize int64           `json:"total_size_bytes"`
 }
 
-// JSON output
-func FormatJSON(model *ollama.Model, m *ollama.Manifest) error {
-	report := Report{
+func BuildReport(model *ollama.Model, m *ollama.Manifest) (*Report, error) {
+	report := &Report{
 		Name:      model.Name,
 		Short:     model.ShortName,
 		Digest:    model.Digest,
@@ -47,13 +45,11 @@ func FormatJSON(model *ollama.Model, m *ollama.Manifest) error {
 		} else {
 			raw, err := json.Marshal(model.Params)
 			if err != nil {
-				return fmt.Errorf("encoding params: %w", err)
+				return nil, fmt.Errorf("encoding params: %w", err)
 			}
 			report.Params = raw
 		}
 	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	return enc.Encode(report)
 
+	return report, nil
 }

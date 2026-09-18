@@ -57,8 +57,10 @@ Resolves the model name, reads its manifest and config blob, and prints it as in
 
 **Flags:**
 
-_None yet — `inspect` currently always prints indented JSON to stdout; there is no human-readable report renderer and no flag parsing on this sub-command._
-
+| Flag | Description |
+|------|-------------|
+| `-format <tmpl>` | Go template for each row, e.g. `'{{.Layers}}\t{{.ModelPath}}'` |
+| `-format json` | Default argument. Prints indented JSON to stdout. |
 
 **Examples:**
 
@@ -68,6 +70,8 @@ ollama-inspector inspect llama3
 
 # Pipe to jq to pull out a field
 ollama-inspector inspect llama3 | jq .config.architecture
+
+./ollama-inspector inspect llama3 --format {{.Layers}}\ {{.ModelPath}}
 
 ```
 
@@ -88,31 +92,46 @@ Lists every blob in the model store, sorted by size descending, with cross-refer
 
 **Flags:**
 
-| Flag       | Description |
-|------------|-------------|
+| Flag | Description |
+|------|-------------|
 | `-orphans` | Show only blobs not referenced by any manifest (safe to delete) |
+| `-quiet`, `-q` | Print only each blob's absolute path, one per line — for piping into `xargs`, `rm`, `du`, etc. |
+| `-format <tmpl>` | Go template for each row, e.g. `'{{.Digest}}\t{{.Size}}'`; prefix with `table ` for aligned columns (the default). Pass `-format json` for JSON output. |
 
 **Examples:**
 
 ```bash
-# List all blobs
+# List all blobs (default table output)
 ollama-inspector blobs
 
 # Find unreferenced blobs you can clean up
 ollama-inspector blobs -orphans
+
+# Delete all orphaned blobs
+ollama-inspector blobs -orphans -q | xargs rm
+
+# JSON output for scripting
+ollama-inspector blobs -format json
+
+# Custom template — just digest and size, tab-separated
+ollama-inspector blobs -format '{{.Digest}}\t{{.Size}}'
+
+# Aligned custom table with a header
+ollama-inspector blobs -format 'table {{.Digest}}\t{{.RefBy}}'
 ```
 
 **Sample output:**
 
 ```
-DIGEST               SIZE        TYPE          REFERENCED BY
-────────────────────  ──────────  ────────────  ──────────────────────────────
-sha256:6a0746a1…     4.7 GB      model         llama3:latest
-sha256:dde5aa3…      4.1 GB      model         mistral:7b
-sha256:8ab4849b…     1.4 KB      template      llama3:latest, mistral:7b
-sha256:fa304d67…     7.0 KB      license       llama3:latest
+Blobs directory: /usr/share/ollama/.ollama/models/blobs
 
-2 blob(s) — total 8.8 GB
+DIGEST                SIZE    TYPE      REFERENCED BY            FILE
+sha256:6a0746a1…      4.7 GB  model     llama3:latest            sha256-6a0746a1…
+sha256:dde5aa3c…      4.1 GB  model     mistral:7b               sha256-dde5aa3c…
+sha256:8ab4849b…      1.4 KB  template  llama3:latest, mistral:7b  sha256-8ab4849b…
+sha256:fa304d67…      7.0 KB  license   llama3:latest            sha256-fa304d67…
+
+4 blob(s) — total 8.8 GB
 ```
 
 ---

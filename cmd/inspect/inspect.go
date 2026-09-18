@@ -1,6 +1,6 @@
 // Package inspect implements the "inspect" sub-command.
 // It resolves an Ollama manifest by name, loads the config blob,
-// and prints a structured human-readable report.
+// and prints it as JSON — or as a custom Go template via -format.
 package inspect
 
 import (
@@ -11,10 +11,11 @@ import (
 
 	"ollama-inspector/cmd/cli"
 	"ollama-inspector/internal"
+	"ollama-inspector/internal/format"
 	"ollama-inspector/ollama"
 )
 
-const usage = `Usage: ollama-inspector inspect <model>
+const usage = `Usage: ollama-inspector inspect [flags] <model>
 
 Inspect a locally stored Ollama model manifest.
 
@@ -28,9 +29,12 @@ Flags:
 // Run is the entry point for the inspect sub-command.
 func Run(args []string) error {
 	fs := flag.NewFlagSet("inspect", flag.ContinueOnError)
+	var formatFlag string
+	fs.StringVar(&formatFlag, "format", "",
+		"Output format: \"json\" (default), or a Go template such as "+"'{{.Config.ModelType}}'")
 	fs.Usage = func() { fmt.Fprint(os.Stderr, usage); fs.PrintDefaults() }
 
-	positional, flagArgs := cli.SplitArgsAndFlags(args, map[string]bool{})
+	positional, flagArgs := cli.SplitArgsAndFlags(args, map[string]bool{"format": true})
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
@@ -66,5 +70,15 @@ func Run(args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: %v\n", e)
 	}
 
-	return internal.FormatJSON(model, m)
+	report, err := internal.BuildReport(model, m)
+
+	if err != nil {
+		return err
+	}
+
+	w, err := format.New(os.Stdout, formatFlag, format.JSON)
+	if err != nil {
+		return err
+	}
+	return w.One(report)
 }
